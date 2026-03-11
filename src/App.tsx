@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
+import html2canvas from 'html2canvas'
 
 // 任务类型定义
 interface Task {
@@ -21,6 +22,8 @@ function App() {
   const [currentTask, setCurrentTask] = useState<Task | null>(null)
   // 父任务ID
   const [parentTaskId, setParentTaskId] = useState<string | null>(null)
+  // 甘特图容器ref
+  const ganttContainerRef = useRef<HTMLDivElement>(null)
 
   // 生成唯一ID
   const generateId = () => Math.random().toString(36).slice(2, 11)
@@ -296,6 +299,22 @@ function App() {
     )
   }
 
+  // 获取任务层级
+  const getTaskLevel = (taskId: string, tasks: Task[], currentLevel: number = 0): number => {
+    for (const task of tasks) {
+      if (task.id === taskId) {
+        return currentLevel
+      }
+      if (task.children.length > 0) {
+        const level = getTaskLevel(taskId, task.children, currentLevel + 1)
+        if (level !== -1) {
+          return level
+        }
+      }
+    }
+    return -1
+  }
+
   // 渲染甘特图
   const renderGanttChart = () => {
     const { start, end } = getDateRange()
@@ -303,7 +322,7 @@ function App() {
 
     if (allTasks.length === 0) {
       return (
-        <div className="gantt-container">
+        <div className="gantt-container" ref={ganttContainerRef}>
           <div className="gantt-header">
             <h2 className="gantt-title">甘特图</h2>
           </div>
@@ -322,13 +341,33 @@ function App() {
     }
 
     return (
-      <div className="gantt-container">
+      <div className="gantt-container" ref={ganttContainerRef}>
         <div className="gantt-header">
           <h2 className="gantt-title">甘特图</h2>
+          <button className="button button-secondary" onClick={exportGanttChart}>
+            导出甘特图
+          </button>
         </div>
         <div className="gantt-chart">
           {allTasks.map(task => {
             const { left, width } = getTaskPosition(task, start, end)
+            const level = getTaskLevel(task.id, tasks)
+            
+            // 根据任务层级设置不同的颜色
+            const getLevelColor = (level: number) => {
+              const colors = [
+                '#646cff', // 根任务 - 主色
+                '#8b5cf6', // 一级子任务 - 紫色
+                '#3b82f6', // 二级子任务 - 蓝色
+                '#10b981', // 三级子任务 - 绿色
+                '#f59e0b', // 四级子任务 - 橙色
+                '#ef4444'  // 五级及以上 - 红色
+              ]
+              return colors[Math.min(level, colors.length - 1)]
+            }
+            
+            const levelColor = getLevelColor(level)
+            
             return (
               <div key={task.id} className="gantt-row">
                 <div className="gantt-task-name">{task.title}</div>
@@ -342,7 +381,11 @@ function App() {
                   )}
                   <div 
                     className={`gantt-bar ${task.status}`}
-                    style={{ left: `${left}%`, width: `${width}%` }}
+                    style={{ 
+                      left: `${left}%`, 
+                      width: `${width}%`,
+                      backgroundColor: levelColor
+                    }}
                   >
                     {task.deadline}
                   </div>
@@ -353,6 +396,36 @@ function App() {
         </div>
       </div>
     )
+  }
+
+  // 导出甘特图为图片
+  const exportGanttChart = async () => {
+    if (ganttContainerRef.current) {
+      try {
+        // 增加甘特图容器的宽度以容纳所有内容
+        const originalWidth = ganttContainerRef.current.style.width
+        ganttContainerRef.current.style.width = '2000px'
+        
+        const canvas = await html2canvas(ganttContainerRef.current, {
+          scale: 2, // 提高分辨率
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        })
+        
+        // 恢复原始宽度
+        ganttContainerRef.current.style.width = originalWidth
+        
+        // 创建下载链接
+        const link = document.createElement('a')
+        link.download = `甘特图_${new Date().toISOString().split('T')[0]}.png`
+        link.href = canvas.toDataURL('image/png')
+        link.click()
+      } catch (error) {
+        console.error('导出甘特图失败:', error)
+        alert('导出甘特图失败，请稍后重试')
+      }
+    }
   }
 
   // 处理表单提交
