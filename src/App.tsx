@@ -207,9 +207,9 @@ function App() {
 
     const allDates = allTasks
       .flatMap(task => {
-        const dates: Date[] = []
-        if (task.startTime) dates.push(new Date(task.startTime))
-        if (task.deadline) dates.push(new Date(task.deadline))
+        const dates: number[] = []
+        if (task.startTime) dates.push(new Date(task.startTime).getTime())
+        if (task.deadline) dates.push(new Date(task.deadline).getTime())
         return dates
       })
 
